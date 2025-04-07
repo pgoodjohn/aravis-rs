@@ -11,6 +11,7 @@ pub enum ImageError {
 	InvalidStatus(crate::BufferStatus),
 	InvalidPayloadType(crate::BufferPayloadType),
 	UnsupportedPixelFormat(PixelFormat),
+	InvalidImageSize(u32, u32),
 }
 
 impl Buffer {
@@ -158,16 +159,14 @@ impl Buffer {
 		let data = Vec::from(self.into_boxed_slice());
 
 		match format {
-			PixelFormat::RGB_8_PACKED => {
-				return Ok(DynamicImage::ImageRgb8(
-					ImageBuffer::from_raw(width, height, data).unwrap(),
-				))
-			}
-			PixelFormat::MONO_8 => {
-				return Ok(DynamicImage::ImageLuma8(
-					ImageBuffer::from_raw(width, height, data).unwrap(),
-				))
-			}
+			PixelFormat::RGB_8_PACKED => match ImageBuffer::from_raw(width, height, data) {
+				Some(image) => Ok(DynamicImage::ImageRgb8(image)),
+				None => Err(ImageError::InvalidImageSize(width, height)),
+			},
+			PixelFormat::MONO_8 => match ImageBuffer::from_raw(width, height, data) {
+				Some(image) => Ok(DynamicImage::ImageLuma8(image)),
+				None => Err(ImageError::InvalidImageSize(width, height)),
+			},
 			_ => (),
 		};
 
@@ -220,9 +219,10 @@ mod debayer {
 			&mut dest,
 		)
 		.unwrap();
-		Ok(DynamicImage::ImageRgb8(
-			ImageBuffer::from_raw(width, height, buffer).unwrap(),
-		))
+		match ImageBuffer::from_raw(width, height, buffer) {
+			Some(image) => Ok(DynamicImage::ImageRgb8(image)),
+			None => Err(ImageError::InvalidImageSize(width, height)),
+		}
 	}
 }
 
@@ -236,6 +236,9 @@ impl std::fmt::Display for ImageError {
 			Self::InvalidStatus(x) => write!(f, "invalid buffer status: {:?}", x),
 			Self::InvalidPayloadType(x) => write!(f, "invalid buffer payload type: {:?}", x),
 			Self::UnsupportedPixelFormat(x) => write!(f, "unsupported pixel format: {}", x.raw()),
+			Self::InvalidImageSize(width, height) => {
+				write!(f, "invalid image size: {}x{}", width, height)
+			}
 		}
 	}
 }
